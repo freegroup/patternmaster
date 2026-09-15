@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PatternMaster — CNC Pattern Generator</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- ================= App-Toolbar (volle Breite) ================= -->
+  <header id="toolbar">
+    <span class="app-title">PatternMaster</span>
+    <span class="app-sub">CNC surface texture generator</span>
+    <span id="busy"></span>
+    <span class="spacer"></span>
+    <span class="tb-sep"></span>
+    <button id="btnLoad">Load config</button>
+    <button id="btnSave">Save config</button>
+    <button class="primary" id="btnExport">Export G-code</button>
+    <input type="file" id="fileLoad" accept=".json" hidden />
+  </header>
+
+  <div id="app">
+  <!-- ================= Sidebar ================= -->
+  <aside id="sidebar">
+
+    <details class="group" id="secWorkpiece" open>
+      <summary>Workpiece</summary>
+      <div class="body">
+        <div class="field"><label data-help="work.w">Width X (mm)</label><input type="number" data-bind="work.w" min="10" max="2000" step="1" /></div>
+        <div class="field"><label data-help="work.h">Height Y (mm)</label><input type="number" data-bind="work.h" min="10" max="2000" step="1" /></div>
+        <div class="field"><label data-help="work.overshootX">Overshoot X (mm)</label><input type="number" data-bind="work.overshootX" min="0" max="50" step="0.5" /></div>
+        <div class="field"><label data-help="work.overshootY">Overshoot Y (mm)</label><input type="number" data-bind="work.overshootY" min="0" max="50" step="0.5" /></div>
+      </div>
+    </details>
+
+    <details class="group" id="secPattern" open>
+      <summary>Pattern</summary>
+      <div class="body">
+        <div class="field"><label data-help="sel.pattern">Pattern</label><select id="patternSel"></select></div>
+        <div id="patternParams"></div>
+        <div class="field"><label data-help="seed">Seed</label>
+          <div class="inline"><input type="number" data-bind="seed" min="1" step="1" /><button class="dice" id="diceSeed" title="New seed">🎲</button></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="group" id="secCutter" open>
+      <summary>Cutter</summary>
+      <div class="body">
+        <div class="field"><label data-help="sel.tool">Cutter</label><select id="toolSel"></select></div>
+        <div id="toolParams"></div>
+      </div>
+    </details>
+
+    <details class="group" id="secCam">
+      <summary>CAM / Toolpaths</summary>
+      <div class="body">
+        <div class="field"><label data-help="cam.maxDOC">Max stepdown / pass (mm)</label><input type="number" data-bind="cam.maxDOC" min="0.05" max="10" step="0.05" /></div>
+        <div class="field"><label data-help="cam.safeZ">Safe Z (mm)</label><input type="number" data-bind="cam.safeZ" min="0.5" max="30" step="0.5" /></div>
+        <div class="field"><label data-help="cam.feed">Feed (mm/min)</label><input type="number" data-bind="cam.feed" min="50" max="10000" step="50" /></div>
+        <div class="field"><label data-help="cam.plungeFeed">Plunge (mm/min)</label><input type="number" data-bind="cam.plungeFeed" min="20" max="5000" step="20" /></div>
+        <div class="field"><label data-help="cam.rapidRate">Rapid (mm/min)</label><input type="number" data-bind="cam.rapidRate" min="100" max="20000" step="100" /></div>
+        <div class="field"><label data-help="cam.spindle">Spindle S (rpm)</label><input type="number" data-bind="cam.spindle" min="0" max="60000" step="500" /></div>
+      </div>
+    </details>
+  </aside>
+
+  <!-- ================= Main ================= -->
+  <main id="main">
+    <div id="stageRow">
+    <div id="stage">
+      <div id="viewToggle">
+        <button data-view="cpu" class="active">2D</button>
+        <button data-view="webgl3d">3D</button>
+        <button data-view="cam">CAM</button>
+      </div>
+      <div id="viewWrap">
+        <div id="axis">⌞ X0 Y0</div>
+        <div id="viewTime"></div>
+      </div>
+      <div id="viewHint">Drag ⟲ orbit&nbsp;&nbsp;·&nbsp;&nbsp;⇧ + drag ✥ pan&nbsp;&nbsp;·&nbsp;&nbsp;Wheel ⤢ zoom</div>
+    </div>
+
+    <!-- Pfad-Scrubber: eigene Spalte neben der Vorschau (oben = alle Bahnen, unten = erste) -->
+    <div id="pathSliderWrap">
+      <span class="ps-cap">all</span>
+      <input type="range" id="pathSlider" min="0" max="1000" value="1000" step="1"
+             title="Scrub through the cutting sequence" />
+      <span class="ps-cap">1st</span>
+    </div>
+    </div><!-- /#stageRow -->
+
+    <div id="metrics">
+      <span class="m" id="mErrWrap" style="display:none">⚠ <b id="mErr"></b></span>
+    </div>
+  </main>
+  </div><!-- /#app -->
+
+  <!-- ================= Export-Dialog ================= -->
+  <div id="modalBackdrop" hidden>
+    <div class="modal">
+      <h3>Export G-code</h3>
+      <div class="field"><label data-help="sel.post">Post processor</label><select id="postSel"></select></div>
+      <div class="sub" style="margin:6px 0 14px">Feed, plunge and spindle speed come from CAM / Toolpaths.</div>
+      <div class="modal-actions">
+        <button id="modalCancel">Cancel</button>
+        <button class="primary" id="modalExport">Export</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= Scripts (Reihenfolge zählt) ================= -->
+  <!-- Core -->
+  <script src="js/rng.js"></script>
+  <script src="js/noise.js"></script>
+  <script src="js/toolpath.js"></script>
+  <script src="js/simulator.js"></script>
+  <script src="js/metrics.js"></script>
+  <script src="js/help.js"></script>
+  <!-- Plugin-Registries (jede index.js lädt ihre Plugins per document.write nach) -->
+  <script src="js/tools/index.js"></script>
+  <script src="js/ramps/index.js"></script>
+  <script src="js/patterns/index.js"></script>
+  <script src="js/renderers/index.js"></script>
+  <script src="js/gcode/index.js"></script>
+  <!-- App (läuft nach allen Plugins; localstorage.js sanitisiert gegen die Registries) -->
+  <script src="js/localstorage.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
