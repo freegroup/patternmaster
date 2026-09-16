@@ -6,6 +6,7 @@ window.PM = window.PM || {};
 PM.Toolpath = class {
   constructor(opts = {}) {
     this.moves = [];               // { type:'rapid'|'cut', x, y, z }
+    this.simPasses = [];           // full-depth polylines (pre-stepdown) for the simulator
     this.safeZ = opts.safeZ ?? 5;  // Rückzughöhe über Oberfläche
     // Max. Zustelltiefe pro Durchgang (mm). Muss > 0 sein — es gibt bewusst KEINEN
     // "unbegrenzt"-Fall, damit nie versehentlich die volle Tiefe in einem Zug gefahren wird.
@@ -46,8 +47,17 @@ PM.Toolpath = class {
   // alternierender Richtung -> kein Rückzug/Luftfahren zwischen den Ebenen.
   pass(pts) {
     if (!pts || pts.length < 1) return;
+    // Full-depth polyline kept aside for the simulation. The stepdown levels below only ever cut
+    // shallower at the same XY, so for the height map (H = min) the final full-depth pass alone is
+    // exact — feeding just these to the simulator skips the level blow-up with no visual change.
+    this.simPasses.push(pts);
     let maxDepth = 0;
     for (const p of pts) if (-p.z > maxDepth) maxDepth = -p.z;
+
+    // Always retract and rapid over to the start first, THEN plunge — otherwise the tool would cut
+    // a straight line at depth from the end of the previous pass to here (gouging the workpiece
+    // and the exported G-code, e.g. straight across the board between two scattered lakes).
+    this.travelTo(pts[0].x, pts[0].y);
 
     if (maxDepth <= this.maxDOC) {
       this._passAt(pts, 1, Infinity);
@@ -57,8 +67,7 @@ PM.Toolpath = class {
     let seq = pts;
     for (let lv = 1; lv <= levels; lv++) {
       const limit = lv * this.maxDOC; // erlaubte Tiefe dieser Ebene (positiv)
-      // Startpunkt der ersten Ebene sicher anfahren; danach am Bahnende tiefer plungen.
-      if (lv === 1) this.travelTo(seq[0].x, seq[0].y);
+      // Am Bahnende tiefer plungen; Richtung alternierend -> kein Luftfahren zwischen den Ebenen.
       this._passAt(seq, /*plunge*/ true, limit);
       seq = seq.slice().reverse(); // nächste Ebene in Gegenrichtung
     }
@@ -72,15 +81,19 @@ PM.Toolpath = class {
   finish() {
     if (this.pos.z < this.safeZ) this.rapid(this.pos.x, this.pos.y, this.safeZ);
   }
-  // Schnitt-Segmente (nur type==='cut') für die Simulation.
-  cutSegments() {
+  // Segments for the simulation: the full-depth polylines only (no stepdown levels, which are
+  // redundant for a min-blended height map). Order matches the machining pass order, so slicing a
+  // prefix still scrubs through the cutting sequence. Memoised — call only after any coordinate
+  // shift (e.g. overshoot) has been applied to simPasses, since the first call freezes the result.
+  simSegments() {
+    if (this._simSegs) return this._simSegs;
     const segs = [];
-    for (let i = 1; i < this.moves.length; i++) {
-      const a = this.moves[i - 1], b = this.moves[i];
-      if (b.type === 'cut')
+    for (const pts of this.simPasses)
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
         segs.push({ x0: a.x, y0: a.y, z0: a.z, x1: b.x, y1: b.y, z1: b.z });
-    }
-    return segs;
+      }
+    return (this._simSegs = segs);
   }
 };
 

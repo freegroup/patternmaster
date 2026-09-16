@@ -187,6 +187,87 @@ PM.help = {
     </ul>` },
 
   // ---------------- Cutter ----------------
+  'pattern.blobs.density': { description: `
+    <p>How densely the surface is filled with lakes, on a scale of <code>1</code> to <code>100</code>.</p>
+    <ul>
+      <li>low — a few scattered lakes with bare surface between them</li>
+      <li>mid — lakes touch and occasionally overlap</li>
+      <li><code>100</code> — lakes pile up and cover almost the whole surface</li>
+    </ul>
+    <p>The count adapts to the <i>Radius</i> range: larger lakes need fewer of them to reach the
+    same coverage.</p>` },
+
+  'pattern.blobs.size': { description: `
+    <p>Radius of a lake, as a <b>from–to range</b>. Each lake gets a random radius within it.</p>
+    <p>A wide range mixes small ponds and broad basins; a narrow range makes them all similar.</p>` },
+
+  'pattern.blobs.depth': { description: `
+    <p>Depth at the deepest point (the centre) of a lake, as a <b>from–to range</b> in mm.</p>
+    <p>Every lake fades smoothly from this depth in the middle up to zero at its shore, so the
+    basin has a soft, dished bottom rather than a flat floor.</p>` },
+
+  'pattern.blobs.noise': { description: `
+    <p>How irregular the shoreline of a lake is.</p>
+    <ul>
+      <li><code>0</code> — a perfect circle</li>
+      <li>small — a gently squashed, few-lobed shape</li>
+      <li>large — a wavy shoreline with bays and headlands</li>
+    </ul>
+    <p>The irregularity <b>fades toward the centre</b>, so each lake stays a smooth bowl with a
+    wavy shore rather than growing radial ridges. The lobe count is random for each lake.</p>` },
+
+  'pattern.blobs.stepover': { description: `
+    <p>Spacing between the turns of the circular fill that clears each lake, in mm.</p>
+    <p>Smaller gives a smoother basin but more cutting and a longer run time. As a rule of thumb,
+    keep it at or below the cutter radius.</p>` },
+
+  'pattern.blobs.finish': { description: `
+    <p>Stepover of the finishing pass that re-traces each lake once more, in mm.</p>
+    <p>A fine finish pass cleans up the ridges (scallops) a <b>ball nose</b> or <b>bullnose</b>
+    cutter leaves between the roughing turns.</p>
+    <p><b>0</b> switches the finishing pass off — faster, but the roughing scallops stay.</p>` },
+
+  // ---------------- Pattern: Flowers ----------------
+  'pattern.flowers.density': { description: `
+    <p>How densely the surface is filled with flowers, on a scale of <code>1</code> to <code>100</code>.</p>
+    <ul>
+      <li>low — a few scattered flowers with bare surface between them</li>
+      <li>mid — flowers touch and occasionally overlap</li>
+      <li><code>100</code> — flowers pile up and cover almost the whole surface</li>
+    </ul>
+    <p>The count adapts to the <i>Radius</i> range: larger flowers need fewer of them to reach the
+    same coverage.</p>` },
+
+  'pattern.flowers.size': { description: `
+    <p>Radius of a flower, as a <b>from–to range</b>. Each one gets a random radius within it.</p>
+    <p>A wide range mixes small blossoms and broad rosettes; a narrow range makes them similar.</p>` },
+
+  'pattern.flowers.depth': { description: `
+    <p>Depth at the deepest point (the centre) of a flower, as a <b>from–to range</b> in mm.</p>
+    <p>Each one fades smoothly from this depth in the middle up to zero at its rim.</p>` },
+
+  'pattern.flowers.petals': { description: `
+    <p>How pronounced the petals are.</p>
+    <ul>
+      <li><code>0</code> — a plain round dome, no petals</li>
+      <li>mid — a clear flower / rosette</li>
+      <li>high — deep, spiky petals</li>
+    </ul>
+    <p>The petals run from the rim all the way to the centre as radial ridges — that is what tells
+    a flower apart from a smooth <i>Blob</i>. Petal count and shape are random for each flower.</p>` },
+
+  'pattern.flowers.stepover': { description: `
+    <p>Spacing between the turns of the circular fill that clears each flower, in mm.</p>
+    <p>Smaller gives smoother petals but more cutting and a longer run time. As a rule of thumb,
+    keep it at or below the cutter radius.</p>` },
+
+  'pattern.flowers.finish': { description: `
+    <p>Stepover of the finishing pass that re-traces each flower once more, in mm.</p>
+    <p>A fine finish pass cleans up the ridges (scallops) a <b>ball nose</b> or <b>bullnose</b>
+    cutter leaves between the roughing turns.</p>
+    <p><b>0</b> switches the finishing pass off — faster, but the roughing scallops stay.</p>` },
+
+  // ---------------- Cutter ----------------
   'sel.tool': { description: `
     <p>The cutter you are going to run.</p>
     <p>Its shape decides what the groove looks like in cross-section — round with a ball nose,

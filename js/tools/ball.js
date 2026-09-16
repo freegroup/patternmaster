@@ -2,7 +2,7 @@
 PM.registerTool({
   id: 'ball', name: 'Ball nose',
   params: {
-    diameter: { label: 'Diameter', unit: 'mm', type: 'number', default: 6, min: 0.5, max: 20, step: 0.5 }
+    diameter: { label: 'Diameter', unit: 'mm', type: 'number', default: 6, min: 0.5, max: 25, step: 0.5 }
   },
   make(p) {
     const r = p.diameter / 2;

@@ -129,7 +129,12 @@
           </div>`;
         const ia = wrap.querySelector('.r2a'), ib = wrap.querySelector('.r2b');
         ia.value = values[key].a; ib.value = values[key].b;
-        const upd = () => { values[key] = { a: parseFloat(ia.value), b: parseFloat(ib.value) }; schedule(); };
+        const clamp = (el, v) => {
+          if (el.min !== '' && v < parseFloat(el.min)) v = parseFloat(el.min);
+          if (el.max !== '' && v > parseFloat(el.max)) v = parseFloat(el.max);
+          return v;
+        };
+        const upd = () => { values[key] = { a: clamp(ia, parseFloat(ia.value)), b: clamp(ib, parseFloat(ib.value)) }; schedule(); };
         ia.addEventListener('input', upd); ib.addEventListener('input', upd);
         container.appendChild(wrap);
       } else if (s.type === 'select') {
@@ -189,7 +194,11 @@
       const ev = (el.type === 'range' || el.type === 'number') ? 'input' : 'input';
       el.addEventListener(ev, () => {
         let v = el.value;
-        if (el.type === 'number' || el.type === 'range') v = parseFloat(v);
+        if (el.type === 'number' || el.type === 'range') {
+          v = parseFloat(v);
+          if (el.min !== '' && v < parseFloat(el.min)) v = parseFloat(el.min);
+          if (el.max !== '' && v > parseFloat(el.max)) v = parseFloat(el.max);
+        }
         setPath(state, path, v);
         updateReadouts();
         schedule();
@@ -226,7 +235,12 @@
     const gw = { w: state.work.w + 2 * mx, h: state.work.h + 2 * my };
     PM.patterns[state.patternId].generate({ work: gw, tool, seed: state.seed >>> 0, hash: PM.hash, noise, params: patternVals(), tp });
     tp.finish();
-    if (mx || my) for (const mv of tp.moves) { mv.x -= mx; mv.y -= my; }
+    // Overshoot shift affects both the machining moves and the full-depth sim polylines (separate
+    // point objects), so shift both before anything reads the toolpath's geometry.
+    if (mx || my) {
+      for (const mv of tp.moves) { mv.x -= mx; mv.y -= my; }
+      for (const pts of tp.simPasses) for (const p of pts) { p.x -= mx; p.y -= my; }
+    }
     return { tp, tool };
   }
 
@@ -248,13 +262,13 @@
   // Export always uses the full lastTp — the slider only controls what the renderer sees.
   function applySlider(draft) {
     if (!lastTp || !sim) return;
-    const allSegs = lastTp.cutSegments();
     const allMv = lastTp.moves;
-    const n  = state.sliderPos >= 1 ? allSegs.length : Math.max(1, Math.round(allSegs.length * state.sliderPos));
-    const nm = state.sliderPos >= 1 ? allMv.length   : Math.max(1, Math.round(allMv.length   * state.sliderPos));
+    const nm = state.sliderPos >= 1 ? allMv.length : Math.max(1, Math.round(allMv.length * state.sliderPos));
     if (state.rendererId !== 'cam' && lastTool) {
+      const segs = lastTp.simSegments();
+      const n = state.sliderPos >= 1 ? segs.length : Math.max(1, Math.round(segs.length * state.sliderPos));
       sim.setResolution(state.work, computeCell() * (draft ? DRAFT_FACTOR : 1));
-      sim.run(allSegs.slice(0, n), lastTool);
+      sim.run(segs.slice(0, n), lastTool);
     }
     ensureRenderer().update(sim, Object.assign({}, lastRenderOpts, { moves: allMv.slice(0, nm) }));
   }

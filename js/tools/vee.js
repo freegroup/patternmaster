@@ -2,7 +2,7 @@
 PM.registerTool({
   id: 'vee', name: 'V-bit',
   params: {
-    diameter: { label: 'Diameter', unit: 'mm', type: 'number', default: 10, min: 1, max: 30, step: 0.5 },
+    diameter: { label: 'Diameter', unit: 'mm', type: 'number', default: 10, min: 1, max: 40, step: 0.5 },
     angle: { label: 'Included angle', unit: '°', type: 'number', default: 90, min: 10, max: 170, step: 1 }
   },
   make(p) {
