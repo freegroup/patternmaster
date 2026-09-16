@@ -23,7 +23,12 @@
   const persist = () => PM.settings.save(state);
 
   const MAX_CELLS = 24e6; // Schutz gegen zu große Raster
-  const CELL_BUDGET = 12e6; // Ziel-Zellzahl für "best" (fein, aber performant)
+  // Ziel-Zellzahl der vollen Auflösung. Bewusst am Anzeigebedarf orientiert, nicht feiner: bei
+  // z.B. 600×400 sind das ~0.28 mm/Zelle — immer noch feiner als ein Bildschirmpixel, aber die
+  // Simulation muss pro Segment nur ~1/4 so viele Zellen stempeln wie beim früheren 12M-Raster.
+  // Wichtig bei den segmentreichen Mustern (Blobs/Flowers), wo 12M den Nachzieh-Schritt auf
+  // mehrere Sekunden trieb und das UI einfror. Der Toolpath bleibt exakt; das ist reine Anzeige.
+  const CELL_BUDGET = 3e6;
   // Auflösung fest auf "best": feinste Zellgröße, die im Budget bleibt (min. 0.1 mm).
   const computeCell = () => Math.max(0.1, Math.sqrt(state.work.w * state.work.h / CELL_BUDGET));
   // Feste, realistische Erscheinung (nicht konfigurierbar): true-scale 1:1, kein Grain, eine Holzfarbe.
@@ -213,6 +218,23 @@
   let sim = null;
   let lastTp = null, lastTool = null, lastRenderOpts = {};
   let sliderFrame = 0;
+  // Off-main-thread runner for the full-resolution stamp pass (keeps the UI from freezing).
+  // Falls back to the synchronous simulator if the browser won't build the worker.
+  const simWorker = (typeof PM.SimWorker === 'function') ? PM.SimWorker() : null;
+  const LUT_N = 4096;
+  // Tool profile sampled over [0, R] so the worker (which has no plugin code) can evaluate it.
+  // Memoised on the tool; rebuilt whenever the toolpath rebuilds a fresh tool.
+  function toolLUT(tool) {
+    if (tool._lut) return tool._lut;
+    const R = tool.radius, lut = new Float32Array(LUT_N);
+    for (let i = 0; i < LUT_N; i++) {
+      const d = i / (LUT_N - 1) * R;
+      let v = tool.profile(d);
+      if (!isFinite(v)) v = tool.profile(R * 0.999999);
+      lut[i] = v;
+    }
+    return (tool._lut = lut);
+  }
 
   function ensureRenderer() {
     if (rendererId !== state.rendererId || !renderer) {
@@ -254,7 +276,7 @@
   // reagiert. Bleibt es danach kurz ruhig, wird in voller Auflösung nachgezogen.
   // Die SEGMENTE sind in beiden Stufen dieselben — nur die Rasterweite unterscheidet sich.
   // Der Toolpath wird also nie vergröbert, das Endbild ist exakt.
-  const DRAFT_FACTOR = 3;     // gröberes Raster: ~9x weniger Zellen, ~7x schneller
+  const DRAFT_FACTOR = 6;     // gröberes Raster beim Ziehen: ~36x weniger Zellen -> snappy scrubben
   const REFINE_DELAY = 250;   // ms Ruhe, bevor das scharfe Bild gerechnet wird
   let refineTimer = 0;
 
@@ -279,10 +301,43 @@
     clearTimeout(refineTimer);
     applySlider(true);
     $('busy').textContent = '○';                       // grobes Bild steht
-    refineTimer = setTimeout(() => {
-      applySlider(false);
+    refineTimer = setTimeout(refineFull, REFINE_DELAY);
+  }
+
+  // Volle Auflösung. Wenn möglich im Worker (Main-Thread bleibt frei -> kein Einfrieren), sonst
+  // synchron als Fallback. Der Draft steht bereits; das scharfe Bild löst ihn ab, sobald es fertig
+  // ist. Neuestes Ergebnis gewinnt (der Worker verwirft veraltete Jobs selbst).
+  function refineFull() {
+    if (state.rendererId === 'cam' || !lastTool || !lastTp || !sim || !simWorker || !simWorker.available) {
+      applySlider(false);                              // Fallback: synchron
       $('busy').textContent = '';
-    }, REFINE_DELAY);
+      return;
+    }
+    const cell = computeCell();
+    const nx = Math.max(2, Math.ceil(state.work.w / cell) + 1);
+    const ny = Math.max(2, Math.ceil(state.work.h / cell) + 1);
+    const segs = lastTp.simSegments();
+    const total = segs.length;
+    const n = state.sliderPos >= 1 ? total : Math.max(1, Math.round(total * state.sliderPos));
+    const nm = state.sliderPos >= 1 ? lastTp.moves.length : Math.max(1, Math.round(lastTp.moves.length * state.sliderPos));
+    // Fresh Float64 packing (transferred to the worker); float64 keeps rim cells bit-identical.
+    const packed = new Float64Array(n * 6);
+    for (let i = 0; i < n; i++) {
+      const s = segs[i], o = i * 6;
+      packed[o] = s.x0; packed[o + 1] = s.y0; packed[o + 2] = s.z0;
+      packed[o + 3] = s.x1; packed[o + 4] = s.y1; packed[o + 5] = s.z1;
+    }
+    const movesSlice = lastTp.moves.slice(0, nm);
+    simWorker.run(
+      { nx, ny, cell, radius: lastTool.radius, lut: toolLUT(lastTool), lutN: LUT_N, segs: packed, count: n, work: state.work },
+      (res) => {
+        ensureRenderer().update(
+          { H: res.H, nx: res.nx, ny: res.ny, cell: res.cell, work: res.work },
+          Object.assign({}, lastRenderOpts, { moves: movesSlice })
+        );
+        $('busy').textContent = '';
+      }
+    );
   }
 
   function runPipeline() {
