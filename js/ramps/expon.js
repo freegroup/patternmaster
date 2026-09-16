@@ -15,7 +15,11 @@ PM.registerRamp({
   name: 'Exponential',
 
   len: 8,
-  steps: 10,
+
+  // Unterteilung der Kurve. Bewusst fein: Diese Stützpunkte landen 1:1 im G-Code, zu grobe
+  // Stufen sieht man später am gefrästen Werkstück. Das kostet Rechenzeit in der Vorschau,
+  // aber die Fräsqualität hat hier Vorrang.
+  steps: 20,
 
   // Hoch drei: bei halber Rampe erst 1/8 der Tiefe erreicht.
   depthAt(progress) {

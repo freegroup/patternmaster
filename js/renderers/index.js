@@ -12,12 +12,16 @@ PM.rendererList = () => Object.values(PM.renderers);
 // der Blickwinkel teilen: Beim Umschalten steht die Ansicht unverändert da.
 // `framedFor` merkt sich, für welche Werkstückgröße schon eingepasst wurde — so passt nur
 // der zuerst gezeigte Renderer ein, der andere übernimmt die Stellung unverändert.
-PM.viewCam = {
-  az: -45 * Math.PI / 180,
-  el: 30 * Math.PI / 180,
-  dist: 800,
-  target: [300, 200, 0],
-  framedFor: ''
+const VIEW_CAM_HOME = { az: -45 * Math.PI / 180, el: 30 * Math.PI / 180, dist: 800, target: [300, 200, 0] };
+
+PM.viewCam = Object.assign({ framedFor: '' }, VIEW_CAM_HOME, { target: VIEW_CAM_HOME.target.slice() });
+
+// Setzt die geteilte Kamera auf die Ausgangsstellung zurück. Das leere `framedFor` sorgt
+// dafür, dass der nächste Frame neu auf das Werkstück einpasst — Winkel und Zoom stimmen
+// danach wieder, unabhängig davon, wie weit vorher weggeschwenkt wurde.
+// Wirkt auf 3D und CAM gleichermaßen, weil beide dieselbe Kamera benutzen.
+PM.resetView = function () {
+  Object.assign(PM.viewCam, VIEW_CAM_HOME, { target: VIEW_CAM_HOME.target.slice(), framedFor: '' });
 };
 
 (function () {

@@ -23,7 +23,7 @@ PM.registerRamp({
   len: 4,
 
   // Bogen -> in Teilstücke zerlegen, sonst wird daraus eine Gerade.
-  steps: 40,
+  steps: 20,
 
   // Radius = 8,5 × Tiefe (Herleitung in js/ramps/index.js).
   depthAt(progress) {

@@ -236,19 +236,39 @@
     // Scallop: nur für Kugelkopf + Muster mit Stepover/Abstand — wird nicht mehr angezeigt, aber berechnet für ggf. spätere Nutzung.
   }
 
+  // Zweistufige Vorschau: Jede Änderung zeichnet sofort auf grobem Raster, damit das UI
+  // reagiert. Bleibt es danach kurz ruhig, wird in voller Auflösung nachgezogen.
+  // Die SEGMENTE sind in beiden Stufen dieselben — nur die Rasterweite unterscheidet sich.
+  // Der Toolpath wird also nie vergröbert, das Endbild ist exakt.
+  const DRAFT_FACTOR = 3;     // gröberes Raster: ~9x weniger Zellen, ~7x schneller
+  const REFINE_DELAY = 250;   // ms Ruhe, bevor das scharfe Bild gerechnet wird
+  let refineTimer = 0;
+
   // applySlider: re-uses the already-built toolpath; slices moves/segments for display only.
   // Export always uses the full lastTp — the slider only controls what the renderer sees.
-  function applySlider() {
+  function applySlider(draft) {
     if (!lastTp || !sim) return;
     const allSegs = lastTp.cutSegments();
     const allMv = lastTp.moves;
     const n  = state.sliderPos >= 1 ? allSegs.length : Math.max(1, Math.round(allSegs.length * state.sliderPos));
     const nm = state.sliderPos >= 1 ? allMv.length   : Math.max(1, Math.round(allMv.length   * state.sliderPos));
     if (state.rendererId !== 'cam' && lastTool) {
-      sim.setResolution(state.work, computeCell());
+      sim.setResolution(state.work, computeCell() * (draft ? DRAFT_FACTOR : 1));
       sim.run(allSegs.slice(0, n), lastTool);
     }
     ensureRenderer().update(sim, Object.assign({}, lastRenderOpts, { moves: allMv.slice(0, nm) }));
+  }
+
+  // Grob zeichnen und das scharfe Bild einplanen. Jeder neue Aufruf verwirft die noch
+  // ausstehende Verfeinerung — beim Ziehen eines Reglers wird also nur einmal am Ende gerechnet.
+  function drawStaged() {
+    clearTimeout(refineTimer);
+    applySlider(true);
+    $('busy').textContent = '○';                       // grobes Bild steht
+    refineTimer = setTimeout(() => {
+      applySlider(false);
+      $('busy').textContent = '';
+    }, REFINE_DELAY);
   }
 
   function runPipeline() {
@@ -270,15 +290,12 @@
       spec: APPEARANCE.spec, shininess: APPEARANCE.shininess,
       woodLight: wood, woodDark: wood
     };
-    if (!sim || sim.nx !== nx || sim.ny !== ny) sim = new PM.Simulator(state.work, cell);
-    sim.setResolution(state.work, cell);
-    applySlider(); // feeds only slider-sliced data to the renderer
+    if (!sim) sim = new PM.Simulator(state.work, cell);
+    drawStaged();  // sofort grob, kurz danach scharf — applySlider setzt das Raster selbst
     updateMetrics(tp, tool);
-    const elapsed = Math.round(performance.now() - t0);
     const est = PM.metrics.estimate(tp, state.cam.feed, state.cam.rapidRate);
     const vt = $('viewTime');
-    if (vt) vt.textContent = fmtTime(est.totalMin) + '  ·  ' + elapsed + ' ms';
-    $('busy').textContent = '';
+    if (vt) vt.textContent = fmtTime(est.totalMin) + '  ·  ' + Math.round(performance.now() - t0) + ' ms';
   }
 
   function showError(msg) {
@@ -336,6 +353,9 @@
   // 2D/3D-Umschalter (Overlay in der Ansicht) — einziger Darstellungs-Regler.
   function updateViewToggle() {
     document.querySelectorAll('#viewToggle button').forEach((b) => b.classList.toggle('active', b.dataset.view === state.rendererId));
+    // Der Bedienhinweis gilt nur für die räumlichen Ansichten; der Reset bleibt immer
+    // sichtbar und setzt die geteilte Kamera für ALLE Ansichten zurück — auch aus 2D heraus,
+    // sodass 3D und CAM beim Umschalten schon wieder eingepasst sind.
     $('viewHint').style.display = (state.rendererId === 'webgl3d' || state.rendererId === 'cam') ? '' : 'none';
   }
   function setupViewToggle() {
@@ -375,12 +395,22 @@
 
     $('diceSeed').addEventListener('click', () => { state.seed = (Math.random() * 1e9) | 0 || 1; document.querySelector('[data-bind="seed"]').value = state.seed; schedule(); });
 
+    // Kamera zurücksetzen. Kein schedule() — der Toolpath ändert sich nicht, es genügt ein
+    // erneutes Zeichnen. Das geleerte framedFor lässt den Renderer dabei neu einpassen.
+    $('btnResetView').addEventListener('click', () => {
+      PM.resetView();
+      drawStaged();
+      persist();
+    });
+
     // Path scrubber: controls how many moves/segments the renderer sees (display only, not export).
+    // rAF bündelt die Eingabe-Events; drawStaged zeichnet dabei grob und zieht erst nach,
+    // wenn der Regler stillsteht. (Ohne die Pfeilfunktion bekäme drawStaged den rAF-Zeitstempel.)
     $('pathSlider').addEventListener('input', () => {
       state.sliderPos = parseInt($('pathSlider').value) / 1000;
       persist();
       cancelAnimationFrame(sliderFrame);
-      sliderFrame = requestAnimationFrame(applySlider);
+      sliderFrame = requestAnimationFrame(() => drawStaged());
     });
     // Toolbar: Export-Dialog, Config speichern/laden
     const modal = $('modalBackdrop');

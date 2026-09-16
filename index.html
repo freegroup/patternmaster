@@ -70,10 +70,13 @@
   <main id="main">
     <div id="stageRow">
     <div id="stage">
-      <div id="viewToggle">
-        <button data-view="cpu" class="active">2D</button>
-        <button data-view="webgl3d">3D</button>
-        <button data-view="cam">CAM</button>
+      <div id="viewCtl">
+        <button id="btnResetView" title="Reset the shared 3D / CAM camera">Reset view</button>
+        <div id="viewToggle">
+          <button data-view="cpu" class="active">2D</button>
+          <button data-view="webgl3d">3D</button>
+          <button data-view="cam">CAM</button>
+        </div>
       </div>
       <div id="viewWrap">
         <div id="axis">⌞ X0 Y0</div>

@@ -28,6 +28,10 @@ PM.Simulator = class {
     const L2 = dx * dx + dy * dy;
     const dz = seg.z1 - seg.z0;
     const R2 = R * R, H = this.H, nx = this.nx;
+    // Tiefster Punkt, den dieses Segment überhaupt erzeugen kann (profile() ist nie negativ).
+    // Zellen, die schon tiefer liegen, kann es nicht mehr verändern -> vor Wurzel und
+    // Profilaufruf abbrechen. Bei Rampen überlappen sich die Stempel stark, dort greift das oft.
+    const zFloor = Math.min(seg.z0, seg.z1);
     for (let iy = iy0; iy <= iy1; iy++) {
       const py = iy * cell;
       const row = iy * nx;
@@ -39,10 +43,11 @@ PM.Simulator = class {
         const ex = px - cx, ey = py - cy;
         const d2 = ex * ex + ey * ey;
         if (d2 > R2) continue;
+        const k = row + ix;
+        if (H[k] <= zFloor) continue;          // schon tiefer -> dieses Segment ändert nichts
         const off = prof(Math.sqrt(d2));
         if (!isFinite(off)) continue;
         const z = (seg.z0 + dz * t) + off;
-        const k = row + ix;
         if (z < H[k]) H[k] = z;
       }
     }

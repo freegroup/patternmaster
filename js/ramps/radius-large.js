@@ -15,7 +15,7 @@ PM.registerRamp({
   name: 'Radius – large',
 
   len: 12,
-  steps: 40,
+  steps: 20,
 
   // Radius = 72,5 × Tiefe (Herleitung in js/ramps/index.js).
   depthAt(progress) {
