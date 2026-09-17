@@ -16,7 +16,8 @@
     sliderPos: 1,     // Pfad-Scrubber (0..1) — nur Anzeige, nie Export
     sections: {},     // { sectionId: offen? } — Auf-/Zuklapp-Zustand der Sidebar
     toolVals: {},     // { toolId: {param: value} }
-    patternVals: {}   // { patternId: {param: value} }
+    patternVals: {},  // { patternId: {param: value} }
+    processorVals: {} // { processorId: {param: value} } — path-processor (filter) settings
   };
 
   // Persistenz liegt in js/ui-settings.js — jede Änderung landet im localStorage.
@@ -58,6 +59,12 @@
   function patternVals() {
     const schema = PM.patterns[state.patternId].params;
     const v = state.patternVals[state.patternId] || (state.patternVals[state.patternId] = defaultsFor(schema));
+    for (const k in schema) if (v[k] == null) v[k] = defaultFor(schema[k]);
+    return v;
+  }
+  function processorVals(id) {
+    const schema = PM.processors[id].params || {};
+    const v = state.processorVals[id] || (state.processorVals[id] = defaultsFor(schema));
     for (const k in schema) if (v[k] == null) v[k] = defaultFor(schema[k]);
     return v;
   }
@@ -177,6 +184,18 @@
 
   function rebuildToolForm() { buildParamForm($('toolParams'), PM.tools[state.toolId].params, toolVals(), 'tool.' + state.toolId); }
   function rebuildPatternForm() { buildParamForm($('patternParams'), PM.patterns[state.patternId].params, patternVals(), 'pattern.' + state.patternId); }
+  // Filter section: render each registered path-processor's params in its own block, so new
+  // processor plugins appear automatically (the sidebar mirrors the pipeline).
+  function rebuildFilterForm() {
+    const host = $('filterParams');
+    host.innerHTML = '';
+    for (const proc of PM.processorList()) {
+      if (!proc.params) continue;
+      const block = document.createElement('div');
+      host.appendChild(block);
+      buildParamForm(block, proc.params, processorVals(proc.id), 'processor.' + proc.id);
+    }
+  }
 
   // ---------- Selects befüllen ----------
   function fillSelect(el, list, current, onChange) {
@@ -246,7 +265,7 @@
     return renderer;
   }
 
-  function buildToolpath() {
+  async function buildToolpath() {
     const tool = PM.tools[state.toolId].make(toolVals());
     const tp = new PM.Toolpath({ safeZ: state.cam.safeZ, maxDOC: state.cam.maxDOC });
     // Deterministisch: Generatoren nutzen PM.hash(seed, index...) statt eines RNG.
@@ -256,13 +275,29 @@
     const mx = Math.max(0, state.work.overshootX || 0), my = Math.max(0, state.work.overshootY || 0);
     const gw = { w: state.work.w + 2 * mx, h: state.work.h + 2 * my };
     PM.patterns[state.patternId].generate({ work: gw, tool, seed: state.seed >>> 0, hash: PM.hash, noise, params: patternVals(), tp });
+
+    // Collected polylines -> shift into the final workpiece frame [0..W,0..H] so the processors and
+    // the clip geometry work in workpiece coordinates.
+    let paths = tp.rawPaths;
+    if (mx || my) for (const pts of paths) for (const p of pts) { p.x -= mx; p.y -= my; }
+
+    // Path-processor pipeline (clipping, …) — runs in a worker (async).
+    // Clip boundary = workpiece PLUS the overshoot margin, so the intended overhang stays and only
+    // paths running beyond the overshoot band get trimmed. In the shifted frame that is
+    // [-mx, W+mx] × [-my, H+my].
+    const steps = PM.processorList().map(p => ({ id: p.id, params: processorVals(p.id) }));
+    const W = state.work.w, H = state.work.h;
+    const baseCtx = {
+      work: { w: W, h: H },
+      overshoot: { x: mx, y: my },
+      geometry: { polygon: [{ x: -mx, y: -my }, { x: W + mx, y: -my }, { x: W + mx, y: H + my }, { x: -mx, y: H + my }] },
+      tool: { radius: tool.radius }
+    };
+    paths = await PM.runProcessors(paths, baseCtx, steps);
+
+    // Processed paths -> moves.
+    for (const p of paths) tp._emitPass(p);
     tp.finish();
-    // Overshoot shift affects both the machining moves and the full-depth sim polylines (separate
-    // point objects), so shift both before anything reads the toolpath's geometry.
-    if (mx || my) {
-      for (const mv of tp.moves) { mv.x -= mx; mv.y -= my; }
-      for (const pts of tp.simPasses) for (const p of pts) { p.x -= mx; p.y -= my; }
-    }
     return { tp, tool };
   }
 
@@ -340,7 +375,8 @@
     );
   }
 
-  function runPipeline() {
+  let pipelineGen = 0;
+  async function runPipeline() {
     $('mErrWrap').style.display = 'none';
     const cell = computeCell();
     const nx = Math.ceil(state.work.w / cell) + 1;
@@ -350,7 +386,15 @@
       return;
     }
     const t0 = performance.now();
-    const { tp, tool } = buildToolpath();
+    const gen = ++pipelineGen;
+    let tp, tool;
+    try {
+      ({ tp, tool } = await buildToolpath());
+    } catch (e) {
+      if (e && e.message === 'superseded') return;   // a newer run took over
+      throw e;
+    }
+    if (gen !== pipelineGen) return;                 // superseded while awaiting -> drop stale result
     lastTp = tp; lastTool = tool;
     const wood = APPEARANCE.wood;
     lastRenderOpts = {
@@ -380,7 +424,7 @@
     $('busy').textContent = '…';
     requestAnimationFrame(() => {
       scheduled = false;
-      try { runPipeline(); } catch (e) { showError(e.message || String(e)); console.error(e); }
+      runPipeline().catch((e) => { showError(e.message || String(e)); console.error(e); });
       persist();
     });
   }
@@ -442,7 +486,7 @@
     updateViewToggle();
     $('pathSlider').value = Math.round(state.sliderPos * 1000);
     document.querySelectorAll('[data-bind]').forEach((el) => { el.value = getPath(state, el.getAttribute('data-bind')); });
-    rebuildToolForm(); rebuildPatternForm(); updateReadouts();
+    rebuildToolForm(); rebuildPatternForm(); rebuildFilterForm(); updateReadouts();
   }
 
   // ---------- Init ----------
@@ -458,6 +502,7 @@
     bindStatic();
     rebuildToolForm();
     rebuildPatternForm();
+    rebuildFilterForm();
     updateReadouts();
     activateHelp(document);                                  // statische Labels
     document.addEventListener('click', closeHelp);           // Klick daneben schließt

@@ -182,9 +182,11 @@ button.dice { padding: 4px 8px; }
 }
 
 /* (?) help badge next to every adjustable-value label */
+/* Center the badge with the label text via flex — reliable regardless of font metrics. */
+.field label:has(.helpico), label:has(.helpico) { display: inline-flex; align-items: center; gap: 5px; }
 .helpico {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 14px; height: 14px; margin-left: 5px; padding: 0; vertical-align: -2px;
+  width: 14px; height: 14px; margin-left: 0; padding: 0;
   border: 1px solid var(--line); border-radius: 50%; background: transparent;
   color: var(--muted); font-size: 9px; font-weight: 700; line-height: 1;
   cursor: help; flex: 0 0 auto;

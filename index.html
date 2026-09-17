@@ -53,6 +53,13 @@
       </div>
     </details>
 
+    <details class="group" id="secFilters" open>
+      <summary>Post Processing</summary>
+      <div class="body">
+        <div id="filterParams"></div>
+      </div>
+    </details>
+
     <details class="group" id="secCam">
       <summary>CAM / Toolpaths</summary>
       <div class="body">
@@ -114,6 +121,8 @@
   </div>
 
   <!-- ================= Scripts (Reihenfolge zählt) ================= -->
+  <!-- Vendored libs -->
+  <script src="lib/clipper.js"></script>
   <!-- Core -->
   <script src="js/rng.js"></script>
   <script src="js/noise.js"></script>
@@ -125,6 +134,7 @@
   <script src="js/tools/index.js"></script>
   <script src="js/ramps/index.js"></script>
   <script src="js/patterns/index.js"></script>
+  <script src="js/processors/index.js"></script>
   <script src="js/renderers/index.js"></script>
   <script src="js/gcode/index.js"></script>
   <!-- App (läuft nach allen Plugins; localstorage.js sanitisiert gegen die Registries) -->

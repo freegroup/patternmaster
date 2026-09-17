@@ -80,6 +80,17 @@ PM.settings = (function () {
     if (!(state.cam.maxDOC > 0)) state.cam.maxDOC = 0.6;
     state.sliderPos = Math.min(1, Math.max(0, +state.sliderPos || 1));
     if (!state.sections || typeof state.sections !== 'object') state.sections = {};
+    // Path-processor (filter) settings: keep as an object and drop any stored select value that is
+    // no longer a valid option (processorVals() then lazily restores that param's default).
+    if (!state.processorVals || typeof state.processorVals !== 'object') state.processorVals = {};
+    for (const id in PM.processors) {
+      const schema = PM.processors[id].params || {}, vals = state.processorVals[id];
+      if (!vals || typeof vals !== 'object') continue;
+      for (const k in schema) {
+        const s = schema[k];
+        if (s.type === 'select' && vals[k] != null && !s.options.some(([v]) => v === vals[k])) delete vals[k];
+      }
+    }
   }
 
   // Restores the open/closed state of every <details class="group" id="..."> and keeps it

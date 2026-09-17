@@ -26,18 +26,21 @@ PM.registerRenderer({
 in vec3 aPos; in vec3 aColor; uniform mat4 uMVP; out vec3 vC;
 void main(){ gl_Position = uMVP * vec4(aPos,1.0); vC = aColor; }`));
     gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, `#version 300 es
-precision mediump float; in vec3 vC; out vec4 o; void main(){ o = vec4(vC,1.0); }`));
+precision mediump float; in vec3 vC; uniform float uAlpha; out vec4 o; void main(){ o = vec4(vC,uAlpha); }`));
     gl.linkProgram(prog);
     const A = { pos: gl.getAttribLocation(prog, 'aPos'), col: gl.getAttribLocation(prog, 'aColor') };
-    const U = { mvp: gl.getUniformLocation(prog, 'uMVP') };
+    const U = { mvp: gl.getUniformLocation(prog, 'uMVP'), alpha: gl.getUniformLocation(prog, 'uAlpha') };
     const posB = gl.createBuffer(), colB = gl.createBuffer();
     const fPosB = gl.createBuffer(), fColB = gl.createBuffer();
-    let lineCount = 0, frameCount = 0;
+    const oPosB = gl.createBuffer(), oColB = gl.createBuffer();
+    let lineCount = 0, frameCount = 0, overCount = 0;
 
     gl.enable(gl.DEPTH_TEST);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0.949, 0.953, 0.968, 1); // light background like HoruCNC
 
     const RAPID = [0.62, 0.66, 0.72], CUT = [0.95, 0.62, 0.18], WIRE = [0.16, 0.28, 0.52];
+    const OVER = [0.52, 0.63, 0.82]; // lighter blue for the overshoot margin (drawn at 0.5 alpha)
     const cam = PM.viewCam;   // gemeinsam mit der 3D-Ansicht -> kein Sprung beim Umschalten
     let bbox = null;
 
@@ -88,6 +91,26 @@ precision mediump float; in vec3 vC; out vec4 o; void main(){ o = vec4(vC,1.0); 
       gl.bindBuffer(gl.ARRAY_BUFFER, fPosB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(fp), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, fColB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(fc), gl.STATIC_DRAW);
       frameCount = fp.length / 3;
+
+      // ---- Overshoot-Rand: helles, halbtransparentes Band um das Werkstück auf der Oberfläche ----
+      // Zeigt, wie weit die Bahnen über die Kante laufen. Nur der Rahmen-Streifen zwischen
+      // Werkstück-Kante [0..W,0..H] und Overshoot-Kante [-mx..W+mx, -my..H+my] wird gefüllt.
+      const mx = Math.max(0, (work && work.overshootX) || 0), my = Math.max(0, (work && work.overshootY) || 0);
+      const op = [], oc = [];
+      if (mx > 0 || my > 0) {
+        const band = (x0, y0, x1, y1) => {
+          const q = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+          [0, 1, 2, 0, 2, 3].forEach(k => { op.push(q[k][0], q[k][1], 0); oc.push(OVER[0], OVER[1], OVER[2]); });
+        };
+        band(-mx, -my, W + mx, 0);     // unten
+        band(-mx, H, W + mx, H + my);  // oben
+        band(-mx, 0, 0, H);            // links
+        band(W, 0, W + mx, H);         // rechts
+        grow(-mx, -my, 0); grow(W + mx, H + my, 0); // Fit schließt den Overshoot ein
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, oPosB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(op), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, oColB); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(oc), gl.STATIC_DRAW);
+      overCount = op.length / 3;
       bbox = bb;
     }
 
@@ -141,6 +164,7 @@ precision mediump float; in vec3 vC; out vec4 o; void main(){ o = vec4(vC,1.0); 
       const mvp = mul(perspective(40 * Math.PI / 180, canvas.width / canvas.height, near, far), lookAt(eye, cam.target, [0, 0, 1]));
       gl.useProgram(prog);
       gl.uniformMatrix4fv(U.mvp, false, new Float32Array(mvp));
+      gl.uniform1f(U.alpha, 1.0);
       gl.bindBuffer(gl.ARRAY_BUFFER, posB); gl.enableVertexAttribArray(A.pos); gl.vertexAttribPointer(A.pos, 3, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, colB); gl.enableVertexAttribArray(A.col); gl.vertexAttribPointer(A.col, 3, gl.FLOAT, false, 0, 0);
       gl.drawArrays(gl.LINES, 0, lineCount);
@@ -149,6 +173,15 @@ precision mediump float; in vec3 vC; out vec4 o; void main(){ o = vec4(vC,1.0); 
         gl.bindBuffer(gl.ARRAY_BUFFER, fPosB); gl.enableVertexAttribArray(A.pos); gl.vertexAttribPointer(A.pos, 3, gl.FLOAT, false, 0, 0);
         gl.bindBuffer(gl.ARRAY_BUFFER, fColB); gl.enableVertexAttribArray(A.col); gl.vertexAttribPointer(A.col, 3, gl.FLOAT, false, 0, 0);
         gl.drawArrays(gl.TRIANGLES, 0, frameCount);
+      }
+      // Overshoot-Band zuletzt: halbtransparent, ohne Tiefenschreiben, damit es nur überblendet.
+      if (overCount) {
+        gl.enable(gl.BLEND); gl.depthMask(false);
+        gl.uniform1f(U.alpha, 0.5);
+        gl.bindBuffer(gl.ARRAY_BUFFER, oPosB); gl.enableVertexAttribArray(A.pos); gl.vertexAttribPointer(A.pos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, oColB); gl.enableVertexAttribArray(A.col); gl.vertexAttribPointer(A.col, 3, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, overCount);
+        gl.depthMask(true); gl.disable(gl.BLEND);
       }
     }
 

@@ -267,6 +267,22 @@ PM.help = {
     cutter leaves between the roughing turns.</p>
     <p><b>0</b> switches the finishing pass off — faster, but the roughing scallops stay.</p>` },
 
+  // ---------------- Post Processing: Clipping ----------------
+  'processor.clipping.mode': { description: `
+    <p>Trims the milled paths to the workpiece <b>plus its overshoot margin</b>, so the intended
+    overhang stays and only paths running beyond the overshoot band get cut off. Where a path
+    leaves the area the tool lifts to safe height, moves to the next point inside, and plunges
+    again.</p>
+    <ul>
+      <li><b>None</b> — no trimming; paths run out as far as the pattern makes them.</li>
+      <li><b>Middle</b> — the cutter centre stops at the boundary; the cut can overhang it by up to
+        the cutter radius.</li>
+      <li><b>Inner</b> — the whole cutter stays inside the boundary; a strip one radius wide is
+        left untouched.</li>
+      <li><b>Outer</b> — the cut is allowed a little past the boundary (up to one radius), so the
+        boundary is fully machined.</li>
+    </ul>` },
+
   // ---------------- Cutter ----------------
   'sel.tool': { description: `
     <p>The cutter you are going to run.</p>

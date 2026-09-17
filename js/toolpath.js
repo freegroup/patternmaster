@@ -6,7 +6,8 @@ window.PM = window.PM || {};
 PM.Toolpath = class {
   constructor(opts = {}) {
     this.moves = [];               // { type:'rapid'|'cut', x, y, z }
-    this.simPasses = [];           // full-depth polylines (pre-stepdown) for the simulator
+    this.rawPaths = [];            // polylines collected from the generator (pre-processing)
+    this.simPasses = [];           // full-depth polylines (post-processing) for the simulator
     this.safeZ = opts.safeZ ?? 5;  // Rückzughöhe über Oberfläche
     // Max. Zustelltiefe pro Durchgang (mm). Muss > 0 sein — es gibt bewusst KEINEN
     // "unbegrenzt"-Fall, damit nie versehentlich die volle Tiefe in einem Zug gefahren wird.
@@ -42,21 +43,25 @@ PM.Toolpath = class {
     if (this.pos.z < this.safeZ) this.rapid(this.pos.x, this.pos.y, this.safeZ);
     this.rapid(x, y, this.safeZ);
   }
-  // Polylinie fräsen: erster Punkt = Plunge, Rest = Schnitt.
-  // Tiefer als maxDOC -> Zerlegung in gestaffelte Ebenen (Zustellung), mit
-  // alternierender Richtung -> kein Rückzug/Luftfahren zwischen den Ebenen.
+  // Generators call pass() to hand over a cut polyline. It only COLLECTS the path here; the
+  // path-processor pipeline (clipping, …) runs on the collected paths first, then buildToolpath
+  // feeds the results to _emitPass() to produce the actual moves. Keeping collect and emit apart
+  // is what lets processors sit between "pattern" and "G-code".
   pass(pts) {
+    if (pts && pts.length) this.rawPaths.push(pts);
+  }
+  // Emit one (already processed) polyline as moves: safe-travel to the start, then plunge and cut.
+  // Deeper than maxDOC -> staggered stepdown levels, alternating direction (no air-travel between
+  // levels). Always retracts+rapids to the start first, otherwise the tool would cut a straight
+  // line at depth from the previous path to here (gouging the workpiece and the exported G-code).
+  _emitPass(pts) {
     if (!pts || pts.length < 1) return;
-    // Full-depth polyline kept aside for the simulation. The stepdown levels below only ever cut
-    // shallower at the same XY, so for the height map (H = min) the final full-depth pass alone is
-    // exact — feeding just these to the simulator skips the level blow-up with no visual change.
+    // Full-depth polyline for the simulator. The stepdown levels below only ever cut shallower at
+    // the same XY, so for the height map (H = min) the final full-depth pass alone is exact.
     this.simPasses.push(pts);
     let maxDepth = 0;
     for (const p of pts) if (-p.z > maxDepth) maxDepth = -p.z;
 
-    // Always retract and rapid over to the start first, THEN plunge — otherwise the tool would cut
-    // a straight line at depth from the end of the previous pass to here (gouging the workpiece
-    // and the exported G-code, e.g. straight across the board between two scattered lakes).
     this.travelTo(pts[0].x, pts[0].y);
 
     if (maxDepth <= this.maxDOC) {
