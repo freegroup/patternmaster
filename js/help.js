@@ -267,6 +267,58 @@ PM.help = {
     cutter leaves between the roughing turns.</p>
     <p><b>0</b> switches the finishing pass off — faster, but the roughing scallops stay.</p>` },
 
+  // ---------------- Pattern: Truchet (straight & circle) ----------------
+  'pattern.truchet-straight.cols': { description: `
+    <p>Number of cells across the width.</p>
+    <p>With <i>Rows</i> this sets the grid. For the classic woven look keep the cells roughly
+    square (columns ≈ rows × width ÷ height).</p>` },
+  'pattern.truchet-straight.rows': { description: `
+    <p>Number of cells down the height. More rows and columns give a finer weave.</p>` },
+  'pattern.truchet-straight.strings': { description: `
+    <p>How many parallel grooves fill each cell.</p>
+    <p>The grooves line up across cell borders, so higher values give a dense corduroy / fabric
+    texture rather than isolated tiles.</p>` },
+  'pattern.truchet-straight.layout': { description: `
+    <p>How each cell decides between horizontal and vertical stripes.</p>
+    <ul>
+      <li><b>Random</b> — seeded coin flip per cell; irregular, patchy weave.</li>
+      <li><b>Alternate</b> — strict checkerboard of horizontal/vertical; a regular, symmetric basket
+        weave (with square cells).</li>
+    </ul>` },
+  'pattern.truchet-straight.depth': { description: `
+    <p>Groove depth as a <b>from–to range</b> in mm; every groove gets its own random depth within
+    it, so strings in the same cell can sit at different depths.</p>
+    <p>Looks especially good cut with a <b>V-bit</b> — the grooves become crisp V-channels.</p>` },
+  'pattern.truchet-straight.padding': { description: `
+    <p>Margin (mm) between the grooves and the cell border.</p>
+    <p><b>0</b> fills each cell edge to edge. Larger values inset the stripe patch on all sides, so
+    the cells read as distinct woven tiles with gaps between them.</p>` },
+
+  'pattern.truchet-circle.cols': { description: `
+    <p>Number of cells across the width.</p>
+    <p>Keep cells roughly square (columns ≈ rows × width ÷ height) so the quarter-arcs stay round
+    and meet their neighbours cleanly.</p>` },
+  'pattern.truchet-circle.rows': { description: `
+    <p>Number of cells down the height. More rows and columns give a finer weave of curves.</p>` },
+  'pattern.truchet-circle.strings': { description: `
+    <p>How many concentric quarter-arc grooves fan out in each cell.</p>
+    <p>The arcs meet at the cell edges, so higher values give a dense flowing weave.</p>` },
+  'pattern.truchet-circle.padding': { description: `
+    <p>Margin (mm) between the arcs and the cell border.</p>
+    <p><b>0</b> lets the fans reach the cell edges so they flow into the neighbours. Larger values
+    inset the arcs on all sides, so the cells read as separate rounded tiles.</p>` },
+  'pattern.truchet-circle.layout': { description: `
+    <p>How each cell picks which corner its arc fan sits in.</p>
+    <ul>
+      <li><b>Random</b> — one of the four corners per cell from the seed; irregular flowing weave.</li>
+      <li><b>Alternate</b> — the fans of each 2×2 block point at their shared corner, so the four
+        quarter-arcs close into full concentric circles (regular, symmetric).</li>
+    </ul>` },
+  'pattern.truchet-circle.depth': { description: `
+    <p>Groove depth as a <b>from–to range</b> in mm; every arc gets its own random depth within it,
+    so the rings of a fan can sit at different depths.</p>
+    <p>Looks especially good cut with a <b>V-bit</b> — the arcs become crisp V-channels.</p>` },
+
   // ---------------- Post Processing: Clipping ----------------
   'processor.clipping.mode': { description: `
     <p>Trims the milled paths to the workpiece <b>plus its overshoot margin</b>, so the intended

@@ -13,6 +13,6 @@ PM.zdepth = (d) => -Math.max(0.05, d);
 
 (function () {
   const base = 'js/patterns/';
-  const PATTERN_FILES = ['parallel', 'waves', 'crosshatch', 'noisefield', 'blobs', 'flowers'];
+  const PATTERN_FILES = ['parallel', 'waves', 'crosshatch', 'noisefield', 'blobs', 'flowers', 'truchet-straight', 'truchet-circle'];
   for (const f of PATTERN_FILES) document.write('<script src="' + base + f + '.js"><\/script>');
 })();
